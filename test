@@ -1,3 +1,19 @@
-def function-1 (a,b):
-  return a+b
-function-1(1+1)
+tickers = pd.read_csv("Tickers_Example (1).csv") # should be "Tickers.csv," but replace later 
+start_date = '2023-01-01'
+end_date = '2023-10-31'
+
+def ticker_accessor(tickers): # creates a list of ticker objects after reading in the csv with tickers
+    ticker_list = []
+    for i in range (len(tickers.index)):
+        temp = yf.Ticker(tickers.iloc[i].iloc[0])
+        ticker_list.append(temp)
+    return ticker_list
+ticker_list = ticker_accessor(tickers)
+
+def clean_data(ticker_list, minimum_volume): 
+    for i in range(len(ticker_list)):
+        if ticker_list[i].fast_info['lastVolume'] < minimum_volume:
+            ticker_list = ticker_list.pop(i)
+#ticker_list = clean_data(ticker_list, 150000)
+
+ticker_list[3].fast_info['lastVolume']
