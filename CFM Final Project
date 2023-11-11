@@ -1,1 +1,80 @@
 
+
+
+
+# The below is a messy prototype for a potential stock weighter. It does not follow all the rules and can be improved upon, which is what
+# I am working on in the present. -Daniel Chung. If you want, I will create a short document explaining its theory
+
+def cleanup(old_volatility_data):
+    weight_sum = 0
+    for n in range(0, len(portfolio.columns)):
+        weight_sum = weight_sum + old_volatility_data.iloc[2,n]
+    num_stocks = 0
+    for n in range(0, len(portfolio.columns)):
+        if old_volatility_data.iloc[2,n] >= 0:
+            num_stocks = num_stocks + 1
+    
+    for n in range(0, len(portfolio.columns)):
+        if old_volatility_data.iloc[2,n] < 0:
+            weight_sum = weight_sum - volatility_data.iloc[2,n]
+            old_volatility_data.iloc[1,n] = 0
+            old_volatility_data.iloc[2,n] = 0
+        #elif volatility_data.iloc[1,n] < weight_sum/(2*num_stocks):
+         #   exempted
+    for n in range(0, len(portfolio.columns)):
+        if (old_volatility_data.iloc[2,n] > weight_sum * 0.2):
+            weight_sum = weight_sum - (volatility_data.iloc[2,n] - weight_sum * 0.2)
+            old_volatility_data.iloc[2,n] = weight_sum * 0.2
+            old_volatility_data.iloc[1,n] = weight_sum * 0.2 + 0.001
+
+    return old_volatility_data
+
+def min_search(stock, volatility_1, weight_1, weight_2):
+    if weight_1 == 0 or weight_2 == 0:
+        portfolio[stock] = portfolio[stock] * 0
+        volatility_2 = volatility(portfolio.sum(axis=1).pct_change())
+        return [volatility_2, 0, 0]
+    else:
+        portfolio[stock] = portfolio[stock] * (weight_2/weight_1)
+        volatility_2 = volatility(portfolio.sum(axis=1).pct_change())
+        change = (volatility_2 - volatility_1)/(weight_2 - weight_1)
+        new_weight = weight_2 - change/pow(abs(change+0.0000001), 0.9)
+        return [volatility_2, weight_2, new_weight]
+
+portfolio = pd.DataFrame()
+portfolio.index = stock_prices.index
+
+columns = stock_prices.columns
+investment = 750000
+for n in range(0, len(columns)):
+    portfolio[columns[n]] = ((investment/len(columns)) / stock_prices.iloc[0, n]) * stock_prices[columns[n]]
+
+volatility_data = pd.DataFrame()
+volatility_data.index = ['Vol1', 'Weight1', 'Weight2']
+volatility_data
+       
+vol1 = volatility(portfolio.sum(axis=1).pct_change())
+
+for j in range(0, len(portfolio_stocks)):
+    volatility_data[portfolio_stocks.iloc[j,0]] = [vol1, 1/len(portfolio_stocks.index), 1/len(portfolio_stocks.index) + 0.001]
+
+for i in range(0,100):
+    for j in range (0, len(portfolio.columns)):
+        results = min_search(volatility_data.columns[j],
+                                 volatility_data.iloc[0,j],
+                                 volatility_data.iloc[1,j],
+                                 volatility_data.iloc[2,j])
+        if j == len(portfolio.columns)-1:
+            volatility_data.iloc[0,0] = results[0]
+        else:
+            volatility_data.iloc[0,j+1] = results[0]
+        
+        volatility_data.iloc[1,j] = results[1]
+        volatility_data.iloc[2,j] = results[2]
+    volatility_data = cleanup(volatility_data)
+    print("vol: ", volatility_data.iloc[0,0])    
+
+dropped_stocks = [stocks for stocks in volatility_data.columns if volatility_data[stocks][2] <= 0]
+
+volatility_data.drop(dropped_stocks, axis=1, inplace=True)
+volatility_data
