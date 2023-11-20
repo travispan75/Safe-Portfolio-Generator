@@ -1,5 +1,5 @@
 # Code below reads the csv file and produces a list of tickers with monthly volumes between the start 
-# and end date that are greater than 150000.
+# and end date that are greater than 150000. Will update if info starts working again.
 
 tickers = pd.read_csv("Tickers_Example (2).csv") # should be "Tickers.csv," but replace later 
 start_date = '2023-01-01'
