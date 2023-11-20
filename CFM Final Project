@@ -1,3 +1,15 @@
+Libraries used:
+
+from IPython.display import display, Math, Latex
+
+import pandas as pd
+import numpy as np
+import numpy_financial as npf
+import yfinance as yf
+import matplotlib.pyplot as plt
+import threading
+from datetime import datetime
+
 # Below is a functional algorithm that uses gradient descent to minimize the volatility (as defined in the code) of a portfolio. 
 
 def volatility(changes):
