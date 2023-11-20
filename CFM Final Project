@@ -1,87 +1,220 @@
+# Below is a functional algorithm that uses gradient descent to minimize the volatility (as defined in the code) of a portfolio. 
 
+def volatility(changes):
+    vol = 0
+    length = len(changes.index)
+    for n in range(1, length):
+        vol = vol + pow(changes.iloc[n], 2)/length
+    pow(vol, 1/length)
+    return vol
 
-
-
-# The below is a messy prototype for a potential stock weighter. It does not follow all the rules and can be improved upon, which is what
-# I am working on in the present. -Daniel Chung. If you want, I will create a short document explaining its theory
-
-def cleanup(old_volatility_data):
+def cleanup(old_volatility_data, can_drop):
+    # as a result of changing weightings, sum will not neccesarily add up to 100%. This is okay as long as relative weightings
+    # are preserved -i.e, if final weightings add up to 200%, we can just divide every weight by 2 to correct for this.
     weight_sum = 0
-    for n in range(0, len(portfolio.columns)):
+    for n in range(0, len(old_volatility_data.columns)):
         weight_sum = weight_sum + old_volatility_data.iloc[2,n]
+    # number of stocks we actually invest into
     num_stocks = 0
-    for n in range(0, len(portfolio.columns)):
-        if old_volatility_data.iloc[2,n] >= 0:
+    for n in range(0, len(old_volatility_data.columns)):
+        if old_volatility_data.iloc[2,n] != 0:
             num_stocks = num_stocks + 1
-    
-    for n in range(0, len(portfolio.columns)):
-        if old_volatility_data.iloc[2,n] < 0:
-            weight_sum = weight_sum - volatility_data.iloc[2,n]
-            old_volatility_data.iloc[1,n] = 0
-            old_volatility_data.iloc[2,n] = 0
-        #elif volatility_data.iloc[1,n] < weight_sum/(2*num_stocks):
-         #   exempted
-    for n in range(0, len(portfolio.columns)):
+
+    #finds stock with least weighting
+    min_stock_index = n
+    min_weighting = old_volatility_data.iloc[2,0]
+    for n in range(0, len(old_volatility_data.columns)):
+        if old_volatility_data.iloc[2,n] != 0 and old_volatility_data.iloc[2,n] < min_weighting:
+            min_stock_index = n
+            min_weighting = old_volatility_data.iloc[2,n]
+    #drops stocks if it is permitted, and either there are stocks with negative weightings or we do not meet cap on number
+    # of stocks
+    if (can_drop and (num_stocks > 22 or min_weighting <= 0) and num_stocks > 15):
+        old_volatility_data.iloc[1, min_stock_index] = 0 
+        old_volatility_data.iloc[2, min_stock_index] = 0
+
+    # makes sure upper limit on weightings is not breached
+    for n in range(0, len(old_volatility_data.columns)):
         if (old_volatility_data.iloc[2,n] > weight_sum * 0.2):
             weight_sum = weight_sum - (volatility_data.iloc[2,n] - weight_sum * 0.2)
             old_volatility_data.iloc[2,n] = weight_sum * 0.2
-            old_volatility_data.iloc[1,n] = weight_sum * 0.2 + 0.001
-
+    
+    # number of stocks with positive investment
+    pos_stocks = 0
+    for n in range(0, len(old_volatility_data.columns)):
+        if old_volatility_data.iloc[2,n] > 0:
+            pos_stocks = pos_stocks + 1
+    
+    #makes sure lower limit on weightings is not breached
+    for n in range(0, len(old_volatility_data.columns)):
+        if (old_volatility_data.iloc[2,n] < weight_sum/(2*num_stocks)
+            and old_volatility_data.iloc[2,n] != 0):
+            min_weighting = 1/(2*num_stocks) * (weight_sum - old_volatility_data.iloc[2,n]) / (1 - 1/(2*num_stocks))            
+            weight_diff = old_volatility_data.iloc[2,n] - min_weighting
+            portfolio[stock] = (investment * min_weighting 
+                                / stock_prices.iloc[0,n] * stock_prices[columns[n]])
+            vol_with = volatility(portfolio.sum(axis=1).pct_change())
+            portfolio[stock] = portfolio[stock] * 0
+            vol_without = volatility(portfolio.sum(axis=1).pct_change())
+            portfolio[stock] = (investment * old_volatility_data.iloc[2,n] 
+                                / stock_prices.iloc[0,n] * stock_prices[columns[n]])
+            if pos_stocks < 12:
+                weight_sum = weight_sum + min_weighting - old_volatility_data.iloc[2,n]  
+                old_volatility_data.iloc[2,n] = min_weighting
+            elif vol_with < vol_without:
+                weight_sum = weight_sum + min_weighting - old_volatility_data.iloc[2,n]
+                old_volatility_data.iloc[2,n] = min_weighting
+            else:
+                weight_sum = weight_sum - 0.01 - old_volatility_data.iloc[2,n]
+                old_volatility_data.iloc[2,n] = -0.01
+                pos_stocks = pos_stocks - 1
+                                                                                                                                           
     return old_volatility_data
 
+# Gradient descent function that minimizes volatility
+# Independent variable: Volatility
+# Dependent variable: Weighting of stock
 def min_search(stock, volatility_1, weight_1, weight_2):
-    if weight_1 == 0 or weight_2 == 0:
+    # Stock is not invested into at all
+    if weight_1 == 0 and weight_2 == 0:
         portfolio[stock] = portfolio[stock] * 0
         volatility_2 = volatility(portfolio.sum(axis=1).pct_change())
         return [volatility_2, 0, 0]
     else:
-        portfolio[stock] = portfolio[stock] * (weight_2/weight_1)
+        portfolio[stock] = (investment * weight_2 / stock_prices.iloc[0][stock]) * stock_prices[stock]
         volatility_2 = volatility(portfolio.sum(axis=1).pct_change())
-        change = (volatility_2 - volatility_1)/(weight_2 - weight_1)
-        new_weight = weight_2 - change/pow(abs(change+0.0000001), 0.9)
+        # average change in volatility as a result of changing weightings - approx. for derivative
+        if weight_1 != weight_2:
+            # if volatility increases as result of changing weighting in certain direction, we change weighting in opposite
+            # direction. If volatility decreases, we continue
+            change = (volatility_2 - volatility_1)/(weight_2 - weight_1)
+            if change < 0:
+                new_weight = weight_2 - max(change * 50, -0.01)
+            else:
+                new_weight = weight_2 - min(change * 50, 0.01)
+        #extreme case where algo suggest to keep weightings unchanged (implies optimal weighting is precisley found)
+        else:
+            new_weight = weight_2
+        if new_weight < -0.01:
+            new_weight = -0.01
         return [volatility_2, weight_2, new_weight]
 
+# Creation of initial portfolio
 portfolio = pd.DataFrame()
 portfolio.index = stock_prices.index
 
+# At first, the portfolio is just an equal weighting of all valid stocks
 columns = stock_prices.columns
 investment = 750000
 for n in range(0, len(columns)):
     portfolio[columns[n]] = ((investment/len(columns)) / stock_prices.iloc[0, n]) * stock_prices[columns[n]]
 
+# Dataframe used to keep track of optimization
 volatility_data = pd.DataFrame()
 volatility_data.index = ['Vol1', 'Weight1', 'Weight2']
 volatility_data
-       
+
+# Creation of initial values to get optimization started
 vol1 = volatility(portfolio.sum(axis=1).pct_change())
+for j in range(0, len(portfolio.columns)):
+    volatility_data[portfolio.columns[j]] = [vol1, 1/len(portfolio.columns), 1/len(portfolio.columns) + 0.001]
 
-for j in range(0, len(portfolio_stocks)):
-    volatility_data[portfolio_stocks.iloc[j,0]] = [vol1, 1/len(portfolio_stocks.index), 1/len(portfolio_stocks.index) + 0.001]
-
-for i in range(0,100):
-    for j in range (0, len(portfolio.columns)):
+# Loop that performs optimization   
+for i in range(0,200):
+    # Updates volatility to reflect changes made during cleanup
+    volatility_data.iloc[0,0] = volatility(portfolio.sum(axis=1).pct_change())
+    
+    # Goes through every stock in portfolio
+    for j in range (0, len(volatility_data.columns)-1):
+        # Calls gradient descent on given stock
         results = min_search(volatility_data.columns[j],
                                  volatility_data.iloc[0,j],
                                  volatility_data.iloc[1,j],
                                  volatility_data.iloc[2,j])
-        if j == len(portfolio.columns)-1:
-            volatility_data.iloc[0,0] = results[0]
-        else:
+        #updates data for next stock so that it has volatility data to compare with
+        if j < len(volatility_data.columns)-1:
             volatility_data.iloc[0,j+1] = results[0]
-        
+        else:
+            volatility_data.iloc[0,0] = results[0] 
+        #updates weightings
         volatility_data.iloc[1,j] = results[1]
         volatility_data.iloc[2,j] = results[2]
-    volatility_data = cleanup(volatility_data)
-    print("vol: ", volatility_data.iloc[0,0])    
+    # If portfolio optimization has only been through a few iterations, we avoid eliminating stocks unless their weightings
+    # go negative. Otherwise, we unleash the Hunger Games. Also, we only drop stocks every other iteration to allow for
+    # adjustment of rest of stocks.
+    if i > 11 and i % 4 == 0:
+        volatility_data = cleanup(volatility_data, True)
+    else:
+        volatility_data = cleanup(volatility_data, False)
+    print("volatility: ", volatility_data.iloc[0,0])    
 
+# For data presentation, we drop stocks we do not invest at all in
 dropped_stocks = [stocks for stocks in volatility_data.columns if volatility_data[stocks][2] <= 0]
-
 volatility_data.drop(dropped_stocks, axis=1, inplace=True)
 volatility_data
 
+#renorms weightings for portfolio
+weight_sum = 0
+for n in range(0, len(volatility_data.columns)):
+    weight_sum = weight_sum + volatility_data.iloc[2,n]
+    
+adjustment_factor = 1/weight_sum
 
+for n in range(0, len(volatility_data.columns)):
+    volatility_data.iloc[2,n] = volatility_data.iloc[2,n] * adjustment_factor
+    
+volatility_data
 
+#Here, we go through the list of stocks one more time to make sure none of the requirements are violated. While we
+# attempt to do that continously using cleanup(), the processes in cleanup sacrifice mathematical precision in exchange for
+# faster computing, and thus may result in stocks barely not meeting requirements.
+def set_lower_bound(target_value, old_volatility_data, index):
+    #amount by which to increase weighting
+    diff = target_value - old_volatility_data.iloc[2, index]
+    old_volatility_data.iloc[2, index] = target_value
+    #to prevent rest of weights from being messed up, we must decrease them -if possible -to account for change in weighting
+    available = 0
+    for n in range(0, len(old_volatility_data.columns)):
+        if old_volatility_data.iloc[2,n] > target_value:
+            available += old_volatility_data.iloc[2,n] - target_value
+    #how much to subtract
+    subtract = diff/available
+    for n in range(0, len(old_volatility_data.columns)):
+        if old_volatility_data.iloc[2,n] > 0.05:
+            old_volatility_data.iloc[2,n] = (1 - subtract) * (old_volatility_data.iloc[2,n] - target_value) + target_value
+            
+def set_upper_bound(old_volatility_data, index):
+    #amount by which to increase weighting
+    diff = 0.20 - old_volatility_data.iloc[2, index]
+    old_volatility_data.iloc[2, index] = 0.20
+    #to prevent rest of weights from being messed up, we must decrease them -if possible -to account for change in weighting
+    available = 0
+    for n in range(0, len(old_volatility_data.columns)):
+        if old_volatility_data.iloc[2,n] < 0.20:
+            available += 0.20 - old_volatility_data.iloc[2,n] - 0.20
+    #how much to add
+    add = diff/available
+    for n in range(0, len(old_volatility_data.columns)):
+        if old_volatility_data.iloc[2,n] > 0.05:
+            old_volatility_data.iloc[2,n] = 0.20 - (1 - add) * (0.20 - old_volatility_data.iloc[2,n])
 
+        
+for n in range(0, len(volatility_data.columns)):
+    if volatility_data.iloc[2,n] < 1/(2*len(volatility_data.columns)):
+        set_lower_bound(1/(2*len(volatility_data.columns)), volatility_data, n)
+    elif volatility_data.iloc[2,n] > 0.2:
+        set_upper_bound(volatility_data, n)
+
+#prints out list of stocks to invest in and their weightings
+investment = investment - 4.95 * len(volatility_data.columns)
+investment_sum = 0
+for n in range(0, len(volatility_data.columns)):
+    investment_sum = investment_sum + volatility_data.iloc[2,n] * investment
+    print('Ticker:', volatility_data.columns[n], "|| Weighting: ", round(volatility_data.iloc[2,n] * 100, 4), 
+          "% || Amount: ", round(volatility_data.iloc[2,n] * investment, 2))
+
+print("Number of stocks: ", len(volatility_data.columns)) 
+print("Total investment: ", round(investment_sum, 2))
 
 
 
