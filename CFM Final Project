@@ -81,6 +81,25 @@ volatility_data
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # Below is a prototype for code that filters out the invalid stocks based on assignment specifications and uses multithreading for time efficinecy
 # - Seedhant Kalra 
 
