@@ -78,3 +78,70 @@ dropped_stocks = [stocks for stocks in volatility_data.columns if volatility_dat
 
 volatility_data.drop(dropped_stocks, axis=1, inplace=True)
 volatility_data
+
+
+
+# Below is a prototype for code that filters out the invalid stocks based on assignment specifications and uses multithreading for time efficinecy
+# - Seedhant Kalra 
+
+# Initializing a dataframe for 'raw' data extracted from the .csv file
+tickers_raw = pd.read_csv(file, header=None)[0].tolist()
+
+# Empty data structures to store ticker data in
+tickers = []
+tickers_hist = {}
+
+# Dictionary of all the tickers' closing prices on Nov 25, 2023
+tickers_closing_dict = {}
+
+# Function which consumes a ticker and determines the validation based on prerequisites
+def validate_ticker(ticker):
+
+    # Extracting ticker info from yFinance
+    ticker_info = yf.Ticker(ticker).info
+
+    # Trying every stock and excepting those that throw an error
+    try:
+        # If the stock is valid, we check for each prerequisite:
+        # Checking for USD currency and ensuring it's on the US market
+        # NEW CODE: ticker_info['quoteType'] == "EQUITY"
+        if ticker_info['currency'] == 'USD' and ticker_info['market'] == 'us_market' and ticker_info['quoteType'] == "EQUITY":
+            ticker_hist = yf.Ticker(ticker).history(start=start_date, end=end_date, interval='1d').dropna()
+
+            # Checking monthly volume
+            ticker_monthly_trading_days = ticker_hist['Volume'].groupby(pd.Grouper(freq='MS')).count()
+            ticker_monthly_volume = ticker_hist['Volume'].groupby(pd.Grouper(freq='MS')).sum()
+
+            # Checking if the month has at least 18 trading days
+            for month in ticker_monthly_trading_days.index:
+                if ticker_monthly_trading_days.loc[month] < 18:
+                    ticker_monthly_volume.drop(month, inplace=True)
+
+            # Checking if the average monthly volume is greater than or equal to 150,000 USD
+            if ticker_monthly_volume.mean() >= 150000:
+                tickers.append(ticker)
+                tickers_hist[ticker] = ticker_hist
+                #Get 2023-11-25 closing price data for each ticker
+                tickers_closing = yf.Ticker(ticker).history(start='2023-11-25', end='2023-11-26').loc['2023-11-25', 'Close']
+                tickers_closing_dict[ticker] = tickers_closing
+            else:
+                print(f'{ticker} Ticker does not meet average monthly volume requirements')
+        else:
+            print(f'{ticker} Ticker does not reference stock denominated in USD or is an ETF or index stock')
+    except:
+        print(f'Error: {ticker} Ticker does not reference a valid stock')
+
+# Empty data structure for threading
+threads = []
+
+# Checking validity of each ticker in list of tickers given from threading
+for ticker in tickers_raw:
+    thread = Thread(target=validate_ticker, args=[ticker])
+    thread.start()
+    threads.append(thread)
+
+# Using threading
+for thread in threads:
+    thread.join()
+
+
