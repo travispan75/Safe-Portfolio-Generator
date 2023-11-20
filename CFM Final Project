@@ -1,3 +1,27 @@
+# Code below reads the csv file and produces a list of tickers with monthly volumes between the start 
+# and end date that are greater than 150000.
+
+tickers = pd.read_csv("Tickers_Example (2).csv") # should be "Tickers.csv," but replace later 
+start_date = '2023-01-01'
+end_date = '2023-10-31'
+
+def get_ticker_list(tickers):
+    ticker_list = [yf.Ticker(tickers.columns[0])]
+    for i in range(len(tickers.index)):      
+        ticker_list.append(yf.Ticker(tickers.iloc[i].iloc[0]))
+    return ticker_list
+
+ticker_list = get_ticker_list(tickers)
+
+def clean_list(ticker_list):
+    for i in range(len(ticker_list)):
+        temp_hist = ticker_list[i].history(start=start_date, end=end_date, interval='1mo')
+        if temp_hist['Volume'].mean() < 150000:
+            ticker_list = ticker_list.pop[i]
+    return ticker_list
+
+ticker_list = clean_list(ticker_list)
+
 # Below is a functional algorithm that uses gradient descent to minimize the volatility (as defined in the code) of a portfolio. 
 
 def volatility(changes):
