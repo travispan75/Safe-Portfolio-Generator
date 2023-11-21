@@ -10,6 +10,10 @@ import matplotlib.pyplot as plt
 import threading
 from datetime import datetime
 
+# Global variables
+start_date = '2023-01-01'
+end_date = '2023-10-31'
+
 # Below is a functional algorithm that uses gradient descent to minimize the volatility (as defined in the code) of a portfolio. 
 
 def volatility(changes):
