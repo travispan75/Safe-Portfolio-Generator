@@ -246,10 +246,10 @@ print("Total investment: ", round(investment_sum, 2))
 
 
 # Below is a prototype for code that filters out the invalid stocks based on assignment specifications and uses multithreading for time efficinecy
-# - Seedhant Kalra 
+# - Seedhant Kalra, Travis
 
 # Initializing a dataframe for 'raw' data extracted from the .csv file
-tickers_raw = pd.read_csv("Tickers_Example (2).csv", header=None)[0].tolist()
+tickers_raw = pd.read_csv("Tickers_Example (2).csv", header=None)[0].tolist() #change to Tickers.csv
 
 # Empty data structures to store ticker data in
 tickers = []
@@ -257,6 +257,11 @@ tickers_hist = {}
 
 # Dictionary of all the tickers' closing prices on Nov 25, 2023
 stock_prices = {}
+
+# Exchange rate to convert stocks from USD to CAD
+exchange_ticker = yf.Ticker('USDCAD=x')
+exchange_hist = exchange_ticker.history(start=start_date, end=end_date)
+exchange_hist.index = pd.DatetimeIndex(exchange_hist.index).tz_localize(None)
 
 # Function which consumes a ticker and determines the validation based on prerequisites
 def validate_ticker(ticker):
@@ -269,9 +274,11 @@ def validate_ticker(ticker):
         # If the stock is valid, we check for each prerequisite:
         # Checking for USD currency and ensuring it's on the US market
         # NEW CODE: ticker_info['quoteType'] == "EQUITY"
-        # Update: changed all info to use metadata -Travis 
+        # Update: changed all info to use metadata 
         if (ticker_info['currency'] == 'USD' or ticker_info['currency'] == 'CAD') and ticker_info['instrumentType'] == 'EQUITY':
+            
             ticker_hist = yf.Ticker(ticker).history(start=start_date, end=end_date).dropna()
+            ticker_hist.index = pd.DatetimeIndex(ticker_hist.index).tz_localize(None)
 
             # Checking monthly volume
             ticker_monthly_trading_days = ticker_hist['Volume'].groupby(pd.Grouper(freq='MS')).count()
@@ -288,7 +295,12 @@ def validate_ticker(ticker):
                 tickers_hist[ticker] = ticker_hist
                 #Get 2023-11-25 closing price data for each ticker
                 tickers_closing = yf.Ticker(ticker).history(start=start_date, end=end_date)['Close']
-                stock_prices[ticker] = tickers_closing
+                tickers_closing.index = pd.to_datetime(tickers_closing.index).date
+                #Adjusted for exchange rates
+                if ticker_info['currency'] == 'USD':
+                    stock_prices[ticker] = tickers_closing.mul(exchange_hist['Close'])
+                else:
+                    stock_prices[ticker] = tickers_closing
             else:
                 print(f'{ticker} Ticker does not meet average monthly volume requirements')
         else:
@@ -310,4 +322,6 @@ for thread in threads:
     thread.join()
 
 # Update: changed dictionary to dataframe to combine with Daniel's code
+
 stock_prices = pd.DataFrame(stock_prices)
+stock_prices.index = pd.to_datetime(stock_prices.index).date
