@@ -296,11 +296,7 @@ def validate_ticker(ticker):
                 #Get 2023-11-25 closing price data for each ticker
                 tickers_closing = yf.Ticker(ticker).history(start=start_date, end=end_date)['Close']
                 tickers_closing.index = pd.to_datetime(tickers_closing.index).date
-                #Adjusted for exchange rates
-                if ticker_info['currency'] == 'USD':
-                    stock_prices[ticker] = tickers_closing.mul(exchange_hist['Close'])
-                else:
-                    stock_prices[ticker] = tickers_closing
+                stock_prices[ticker] = tickers_closing
             else:
                 print(f'{ticker} Ticker does not meet average monthly volume requirements')
         else:
