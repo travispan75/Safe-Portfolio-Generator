@@ -330,3 +330,6 @@ for thread in threads:
 
 stock_prices = pd.DataFrame(stock_prices)
 stock_prices.index = pd.to_datetime(stock_prices.index).date
+
+
+print(tickers)
