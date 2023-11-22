@@ -207,15 +207,9 @@ vol1 = volatility(portfolio.sum(axis=1).pct_change())
 for j in range(0, len(portfolio.columns)):
     volatility_data[portfolio.columns[j]] = [vol1, 1/len(portfolio.columns), 1/len(portfolio.columns) + 0.005]
 
-original_vol = volatility_data.iloc[0,0]
-# Loop that performs optimization 
-# Runs until enough stocks have been removed and either change in volatility has settled down enough or hard limit is met
-i = 0
-vol_change = [100, 100, 100, 100, 100]
-while(i < (11 + (len(portfolio.columns) - 22) * 4 + 20) or (sum(vol_change) < original_vol/20 and i < 500) ):
+for i in range(0, ((len(portfolio.columns) - 22) * 3 + 50)):
     # Updates volatility to reflect changes made during cleanup
     volatility_data.iloc[0,0] = volatility(portfolio.sum(axis=1).pct_change())
-    first_vol = volatility_data.iloc[0,0]
     # Goes through every stock in portfolio
     for j in range (0, len(volatility_data.columns)-1):
         # Calls gradient descent on given stock
@@ -236,17 +230,12 @@ while(i < (11 + (len(portfolio.columns) - 22) * 4 + 20) or (sum(vol_change) < or
     # If portfolio optimization has only been through a few iterations, we avoid eliminating stocks unless their weightings
     # go negative. Otherwise, we unleash the Hunger Games. Also, we only drop stocks every other iteration to allow for
     # adjustment of rest of stocks.
-    if i > 11 and i % 4 == 0:
+    if i > 11 and i % 3 == 0:
         volatility_data = cleanup(volatility_data, True)
     else:
         volatility_data = cleanup(volatility_data, False)
-    second_vol = volatility_data.iloc[0,0]
-    for j in range(0, 4):
-        vol_change[j] = vol_change[j+1]
-    vol_change[4] = abs(first_vol - second_vol)
 
-    print("volatility: ", i, " ", volatility_data.iloc[0,0])   
-    i += 1
+    print("volatility: ", i, " ", volatility_data.iloc[0,0]) 
 
 # For data presentation, we drop stocks we do not invest at all in
 dropped_stocks = [stocks for stocks in volatility_data.columns if volatility_data[stocks][2] <= 0]
@@ -306,6 +295,7 @@ for n in range(0, len(volatility_data.columns)):
         set_upper_bound(volatility_data, n)
 
 #prints out list of stocks to invest in and their weightings
+investment = 750000
 investment = investment - 4.95 * len(volatility_data.columns)
 investment_sum = 0
 for n in range(0, len(volatility_data.columns)):
