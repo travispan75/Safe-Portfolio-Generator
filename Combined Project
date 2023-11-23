@@ -363,3 +363,287 @@ Stocks_Final['Ticker'] = Portfolio_Final['Ticker']
 Stocks_Final['Shares'] = Portfolio_Final['Shares']
 
 Stocks_Final
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+###### OPTION CODE #######
+
+# Global variables to check for availability of options, put-to-call ratios and call-to-put ratios
+options_minimum_met = False
+pcr_minimum_met = False
+cpr_minimum_met = False
+
+# Creating a 2D 
+options_evaluation_raw = {
+    'puts_sum': {},
+    'calls_sum': {},
+    'pcr': {},
+    'cpr': {}
+}
+
+def analyze_options_data(ticker):
+
+    try:
+        # Extracting options data from Yahoo Finance
+        asset = yf.Ticker(ticker)
+        options = asset.option_chain(asset.options[0])
+
+        # Extracting puts volume from options data
+        put_volume = pd.DataFrame().append(options.puts)
+        puts_sum = put_volume['volume'].sum()
+        options_evaluation_raw["puts_sum"][ticker] = puts_sum
+
+        # Extracting calls volume from options data
+        call_volume = pd.DataFrame().append(options.calls)
+        calls_sum = call_volume['volume'].sum()
+        options_evaluation_raw["calls_sum"][ticker] = calls_sum
+
+        # Calculating put-to-call ratio
+        put_to_call_ratio =  puts_sum / calls_sum
+        options_evaluation_raw["pcr"][ticker] = put_to_call_ratio
+
+        # Calculating call-to-put ratio
+        call_to_put_ratio = 1 / put_to_call_ratio
+        options_evaluation_raw["cpr_alt"][ticker] = call_to_put_ratio
+    
+    except IndexError as error:
+        print(f'Dropped {ticker}, no options data available')
+    
+# Checking options market of each ticker in list of tickers given from threading
+for ticker in tickers:
+    thread = Thread(target=analyze_options_data, args=[ticker])
+    thread.start()
+    threads.append(thread)
+
+for thread in threads:
+    thread.join()  
+
+
+
+# Checking if there is sufficient options data for the minimum number of stocks
+options_minimum_met = len(options_evaluation_raw['pcr'].keys()) >= min_stocks
+
+if options_minimum_met:
+    options_evaluation_df = pd.DataFrame(options_evaluation_raw)
+    print("There were a minimum of 12 stocks included in the expansive options market. This the summary:")
+    display(options_evaluation_df.head())
+else:
+    print("The tickers provided lacked sufficient options data.")
+
+
+
+def display_pcr_filter(options_evaluation_df, options_minimum_met):
+    if options_minimum_met:
+        # Filtering for stocks with a put-to-call ratio less than 1 and sorting
+        pcr_filter = options_evaluation_df[options_evaluation_df["pcr"] < 1].dropna()
+        pcr_filter = pcr_filter.sort_values(by=['pcr'], ascending=False)
+        print("Displaying the puts-to-calls ratios for the stocks:")
+        display(pcr_filter.head())
+    else:
+        print("Skipping the display as the options market had insufficient data...")
+
+
+
+# Checking if there are enough lower puts-to-call ratio stocks
+def check_heavy_pcr_stocks(options_evaluation_raw, min_stocks):
+    if len(options_evaluation_raw['pcr']) >= min_stocks:
+        print("There are", min_stocks, "stocks with lower puts-to-calls ratio.")
+        pcr_mimimum_met = True
+        pcr_heavy_tickers = list(options_evaluation_raw['pcr'].keys())[:min_stocks]
+        print(pcr_heavy_tickers)
+    else:
+        print("There are not enough stocks with a puts-to-calls ratio less than 1.")
+
+
+if options_minimum_met:
+    # Filtering for stocks with a calls-to-puts ratio less than 1
+    cpr_filter = options_evaluation_df.loc[options_evaluation_df["cpr"] > 1].dropna()
+    cpr_filter = cpr_filter.sort_values(by=['cpr'], ascending=False)
+    print("Displaying the calls-to-puts ratios for the stocks:")
+    display(cpr_filter.head())
+else:
+    print("Insufficient data in the options market, skipping...")
+
+
+
+# Checking if there are enough heavy calls-to-puts ratio stocks
+if options_minimum_met and len(cpr_filter) >= 12:
+    print("There are at least 12 stocks with a low calls-to-puts ratio.")
+    cpr_minimum_met = True
+    cpr_heavy_tickers = list(cpr_filter.index.values)[:12]
+    print(cpr_heavy_tickers)
+else:
+    print("There are not enough stocks with a calls-to-puts ratio less than 1.")
+
+
+
+
+
+if cpr_minimum_met:
+    # Getting the call-to-put ratio portfolios' betas
+    cpr_df = pd.DataFrame(cpr_heavy_tickers, columns = ['Ticker'])
+    cpr_df['Beta'] = cpr_df['Ticker'].replace(beta_dict)
+
+    cpr_df.sort_values(by = ['Beta'], ascending=False, ignore_index = True, inplace = True)
+    display(cpr_df)
+else:
+    print("The call-to-put ratio was not available for enough stocks.")
+
+
+
+if pcr_minimum_met:
+    # Getting the put-to-call ratio portfolios' betas
+    pcr_df = pd.DataFrame(pcr_heavy_tickers, columns = ['Ticker'])
+    pcr_df['Beta'] = pcr_df['Ticker'].replace(beta_dict)
+
+    pcr_df.sort_values(by = ['Beta'], ascending=False, ignore_index = True, inplace = True)
+
+    display(pcr_df)
+else:
+    print("The put-to-call ratio was not available for enough stocks.")
+
+
+
+# NEW CODE
+if (len(cpr_df) >= 12):
+    cpr_minimum_met = True
+else:
+    cpr_minimum_met = False
+    
+if (len(pcr_df) >= 12):
+    pcr_minimum_met = True
+else:
+    pcr_minimum_met = False
+# END OF NEW CODE
+
+
+
+if (cpr_minimum_met and pcr_minimum_met):
+    # Generating portfolios for PCR and CPR stocks
+    pcr_list = pcr_df['Ticker'].tolist()
+    pcr_candidate = num_stocks(pcr_list)
+    pcr_portfolio = generate_combined_portfolio(pcr_candidate)
+    cpr_list = cpr_df['Ticker'].tolist()
+    cpr_portfolio = generate_combined_portfolio(num_stocks(cpr_list))
+
+    # Graphing the portfolios
+    plt.figure(figsize=(20, 5))
+    plt.plot(pcr_portfolio.index, pcr_portfolio['Total Value'], label='PCR Portfolio')
+    plt.plot(cpr_portfolio.index, cpr_portfolio['Total Value'], label='CPR Portfolio')
+
+    plt.title('PCR vs CPR Portfolio')
+    plt.xlabel('Dates')
+    plt.ylabel('Value')
+
+    plt.legend()
+    plt.show()
+
+elif(cpr_minimum_met):
+    # Generating protfolio for CPR stocks
+    cpr_list = cpr_df['Ticker'].tolist()
+    cpr_candidate = num_stocks(cpr_list)
+    cpr_portfolio = generate_combined_portfolio(cpr_candidate)
+
+    # Graphing the portfolio
+    plt.figure(figsize=(20, 5))
+    plt.plot(cpr_portfolio.index, cpr_portfolio['Total Value'], label='CPR Portfolio')
+
+    plt.title('CPR Portfolio')
+    plt.xlabel('Dates')
+    plt.ylabel('Value')
+
+    plt.legend()
+    plt.show()
+
+elif(pcr_minimum_met):
+    # Gererating portfolios for PCR stocks
+    pcr_list = pcr_df['Ticker'].tolist()
+    pcr_portfolio = generate_combined_portfolio(num_stocks(pcr_list))
+
+    # Graphing the portfolios
+    plt.figure(figsize=(20, 5))
+    plt.plot(pcr_portfolio.index, pcr_portfolio['Total Value'], label='PCR Portfolio')
+
+    plt.title('PCR Portfolio')
+    plt.xlabel('Dates')
+    plt.ylabel('Value')
+
+    plt.legend()
+    plt.show()
+else:
+    print ("None of the options markets were large enough.")
+
+
+
+
+# Determines which portfolio to take as our options portfolio to compare with our other strategies later on
+use_cpr = False
+use_pcr = False
+
+# Getting the average of the top cpr tickers and the top pcr tickers
+if (cpr_minimum_met and pcr_minimum_met):
+    cpr_beta_mean = cpr_df['Beta'].mean()
+    pcr_beta_mean = pcr_df['Beta'].mean()
+elif (cpr_minimum_met):
+    use_cpr = True
+    cpr_beta_mean = cpr_df['Beta'].mean()
+    print("The only options market available is the calls-to-puts ratio and the overall beta is: " + str(cpr_beta_mean))
+elif (pcr_minimum_met):
+    use_pcr = True
+    pcr_beta_mean = pcr_df['Beta'].mean()
+    print("The only options market available is the puts-to-calls ratio and the overall beta is: " + str(pcr_beta_mean))
+else:
+    print("None of the options markets were large enough, thus the options market will have no influence over our final portfolio")
+    
+# Comparing the magnitudes of the cpr and pcr tickers and choosing the larger one for our options portfolio
+if (use_cpr and use_pcr):
+    if (cpr_beta_mean > pcr_beta_mean):
+        options_portfolio = cpr_portfolio
+        options_beta = cpr_beta_mean # Setting the options beta to be the beta of the higher magnitude options portfolio
+        final_betas['Options'] = options_beta # Recording the beta of the options portfolio to compare with the others
+        portfolio_candidates["Options"] = cpr_candidate # Dictionary from earlier to store portfolio candidates
+        print("The greater beta comes from the calls-to-puts ratio and the overall beta of it is: " + str(cpr_beta_mean))
+        print("Thus, our options portfolio will be based on the calls-to-puts ratio")
+    elif (cpr_beta_mean < pcr_beta_mean):
+        options_portfolio = pcr_portfolio
+        options_beta = pcr_beta_mean
+        final_betas['Options'] = options_beta
+        portfolio_candidates["Options"] = pcr_candidate
+        print("The greater beta comes from the puts-to-calls ratio and the overall beta of it is: " + str(pcr_beta_mean))
+        print("Thus, our options portfolio will be based on the puts-to-calls ratio")
+              
+if (use_cpr):
+    options_portfolio = cpr_portfolio
+    options_beta = cpr_beta_mean 
+    final_betas['Options'] = options_beta 
+    portfolio_candidates["Options"] = cpr_candidate 
+    print("The greater beta comes from the calls-to-puts ratio and the overall beta of it is: " + str(cpr_beta_mean))
+    print("Thus, our options portfolio will be based on the calls-to-puts ratio")
+
+if (use_pcr):
+    options_portfolio = pcr_portfolio
+    options_beta = pcr_beta_mean
+    final_betas['Options'] = options_beta
+    portfolio_candidates["Options"] = pcr_candidate
+    print("The greater beta comes from the puts-to-calls ratio and the overall beta of it is: " + str(pcr_beta_mean))
+    print("Thus, our options portfolio will be based on the puts-to-calls ratio")
+
+
