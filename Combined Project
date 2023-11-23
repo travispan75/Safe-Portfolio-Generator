@@ -1,3 +1,16 @@
+Libraries Used:
+
+import pandas as pd
+import numpy as np
+import numpy_financial as npf
+import yfinance as yf
+import matplotlib.pyplot as plt
+import threading
+from datetime import datetime
+
+start_date = '2023-01-01'
+end_date = '2023-10-31'
+
 # Below is a prototype for code that filters out the invalid stocks based on assignment specifications and uses multithreading for time efficinecy
 # - Seedhant Kalra, Travis
 
@@ -161,7 +174,7 @@ def cleanup(old_volatility_data, can_drop):
 # Gradient descent function that minimizes volatility
 # Independent variable: Volatility
 # Dependent variable: Weighting of stock
-def min_search(stock, volatility_1, weight_1, weight_2, weight_sum):
+def min_search(stock, volatility_1, weight_1, weight_2):
     # Stock is not invested into at all
     if weight_1 == 0 and weight_2 == 0:
         portfolio[stock] = portfolio[stock] * 0
@@ -216,8 +229,7 @@ for i in range(0, ((len(portfolio.columns) - 22) * 3 + 50)):
         results = min_search(volatility_data.columns[j],
                              volatility_data.iloc[0,j],
                              volatility_data.iloc[1,j],
-                             volatility_data.iloc[2,j],
-                             weight_sum)
+                             volatility_data.iloc[2,j])
         #updates data for next stock so that it has volatility data to compare with
         if j < len(volatility_data.columns)-1:
             volatility_data.iloc[0,j+1] = results[0]
@@ -306,3 +318,48 @@ for n in range(0, len(volatility_data.columns)):
 print("Number of stocks: ", len(volatility_data.columns)) 
 print("Total investment: ", round(investment_sum, 2))
 print("Transaction fees: ", round(4.95 * len(volatility_data.columns), 2))
+
+# The code below creates a final portfolio with all the weightings of the stocks
+def get_price(volatility_data, date):
+    price_list = []
+    for i in range (len(volatility_data.columns)):
+        ticker_hist = yf.Ticker(volatility_data.columns[i]).history(start=start_date, end=end_date).dropna()
+        ticker_hist.index = pd.DatetimeIndex(ticker_hist.index).tz_localize(None)
+        price_list.append(ticker_hist['Close'].loc[date])
+    return price_list
+
+def get_currency(volatility_data):
+    currency_list = []
+    for i in range(len(volatility_data.columns)):
+        ticker_info = yf.Ticker(volatility_data.columns[i]).history_metadata
+        if ticker_info['currency'] == 'USD':
+            currency_list.append('USD')
+        elif ticker_info['currency'] == 'CAD':
+            currency_list.append('CAD')
+    return currency_list
+
+final_close_price = get_price(volatility_data, '2023-01-03') #should be closing price on November 25, 2023
+final_currency = get_currency(volatility_data)
+final_weight = volatility_data.loc['Weight2']*100
+final_value = final_weight/100*750000
+
+Portfolio_Final_Dict = {"Ticker": volatility_data.columns,
+                        "Price": final_close_price, #should be closing price on November 25, 2023
+                        "Currency": final_currency,
+                        "Value (CAD)": final_value,
+                        "Weight": final_weight} 
+    
+Portfolio_Final = pd.DataFrame(Portfolio_Final_Dict)
+Portfolio_Final = Portfolio_Final.reset_index(drop=True)
+Portfolio_Final.index += 1
+Portfolio_Final['Shares'] = Portfolio_Final['Value (CAD)']/(Portfolio_Final['Price']*exchange_hist['Close'].loc['2023-01-03'])
+
+Portfolio_Final
+
+# new cell
+
+Stocks_Final = pd.DataFrame()
+Stocks_Final['Ticker'] = Portfolio_Final['Ticker']
+Stocks_Final['Shares'] = Portfolio_Final['Shares']
+
+Stocks_Final
